@@ -402,6 +402,7 @@ batch = next(iter(train_dataloader))
 import pytorch_lightning as pl
 from transformers import DetrConfig, AutoModelForObjectDetection
 import torch
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 #we wrap our model around pytorch lightning for training
 class YoloS(pl.LightningModule):
@@ -454,8 +455,12 @@ class YoloS(pl.LightningModule):
      def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr,
                                   weight_decay=self.weight_decay)
+        # return optimizer
 
-        return optimizer
+        # Define scheduler
+        scheduler = CosineAnnealingLR(optimizer, T_max=10)
+        return [optimizer], [scheduler]
+
 
      def train_dataloader(self):
         return train_dataloader
@@ -476,17 +481,33 @@ model = YoloS(lr=2.5e-5, weight_decay=1e-4)
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import CSVLogger
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+
+# Define callbacks
+early_stopping = EarlyStopping(
+    monitor="validation/loss", patience=3, mode="min"
+)
+
+checkpoint_callback = ModelCheckpoint(
+    dirpath="drive/MyDrive/checkpoints/",
+    filename="best_model",
+    save_top_k=1,
+    monitor="validation/loss",
+    mode="min"
+)
 
 # csv_logger = CSVLogger("logs/", name="my_model")
-csv_logger = CSVLogger("/content/drive/MyDrive/logs/", name="epoch50")
+csv_logger = CSVLogger("/content/drive/MyDrive/logs/", name="epoch40-changed")
 
 # more epochs leads to a tighter fit of the model to the data
 trainer = Trainer(
-    max_epochs=20,
+    max_epochs=40,
     gradient_clip_val=0.1,
     accumulate_grad_batches=8,
     log_every_n_steps=5,
-    logger=csv_logger)
+    logger=csv_logger,
+    callbacks=[early_stopping, checkpoint_callback]
+    )
 
 trainer.fit(model)
 
